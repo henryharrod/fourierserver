@@ -1,6 +1,7 @@
 ---
 ### New playbook
-- hosts: webservers
+- hosts: localhost
+  connection: local
   ## if you want to only have specific domains from your `vars.yml` file to be executed then you can use the
   ## `-e` command line flag to send in either the domains to include via a `include_domains` var, or domains to exclude
   ## via a `skip_domains` variable.
@@ -14,7 +15,6 @@
     post_run_messages: []
   vars_files:
     - vars.yml
-  remote_user: "{{ remote_sudo_user }}"
   become: true
   ignore_errors: "{{ ansible_check_mode }}"
   roles:
