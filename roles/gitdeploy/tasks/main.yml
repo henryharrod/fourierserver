@@ -1,0 +1,149 @@
+---
+
+## This role takes care of setting up a git deploy system for the website(s) installed.
+
+- block:
+
+  - name: Check if post-update already exists on server, if it does some steps can be skipped.
+    stat:
+      path: /home/{{ remote_web_user }}/{{ item.git_deploy.hubdirectory }}/hooks/post-update
+    register: hubsetup
+    when: >
+      (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+      and item.name not in domains_to_skip
+      and item.git_deploy is defined
+      and item.git_deploy.hubdirectory is defined
+    with_items:
+      - "{{ domains }}"
+
+  - name: Creates directory for the deploy hub bare repository.
+    file:
+      path: /home/{{ remote_web_user }}/{{ item.0.git_deploy.hubdirectory }}
+      state: directory
+    when: >
+      (item.1.skipped is undefined or not item.1.skipped)
+      and "/home/"+remote_web_user+"/"+item.0.git_deploy.hubdirectory+"/hooks/post-update" == item.1.invocation.module_args.path
+      and not item.1.stat.exists
+      and item.0.git_deploy is defined
+      and item.0.git_deploy.hubdirectory is defined
+    with_nested:
+      - "{{ domains }}"
+      - "{{ hubsetup.results }}"
+
+  - name: Initialize bare git repository
+    command: git init --bare
+    args:
+      chdir: /home/{{ remote_web_user }}/{{ item.0.git_deploy.hubdirectory }}
+    when: >
+      (item.1.skipped is undefined or not item.1.skipped)
+      and "/home/"+remote_web_user+"/"+item.0.git_deploy.hubdirectory+"/hooks/post-update" == item.1.invocation.module_args.path
+      and not item.1.stat.exists
+      and item.0.git_deploy is defined
+      and item.0.git_deploy.hubdirectory is defined
+    with_nested:
+      - "{{ domains }}"
+      - "{{ hubsetup.results }}"
+
+  - name: Install post-update hook on server.
+    template:
+      src: full-post-update-hub.j2
+      dest: /home/{{ remote_web_user }}/{{ item.0.git_deploy.hubdirectory }}/hooks/post-update
+      mode: 0755
+    when: >
+      (item.1.skipped is undefined or not item.1.skipped)
+      and "/home/"+remote_web_user+"/"+item.0.git_deploy.hubdirectory+"/hooks/post-update" == item.1.invocation.module_args.path
+      and not item.1.stat.exists
+      and item.0.git_deploy is defined
+      and item.0.git_deploy.hubdirectory is defined
+    with_nested:
+      - "{{ domains }}"
+      - "{{ hubsetup.results }}"
+
+  - name: Install post-update partial for when post-update already exists on server.
+    blockinfile:
+      block: "{{ lookup('template', 'partial-post-update.j2') }}"
+      dest: /home/{{ remote_web_user }}/{{ item.0.git_deploy.hubdirectory }}/hooks/post-update
+      marker: "# --- {mark} ANSIBLE INSERTED BLOCK for {{ item.0.name }} ---"
+      insertbefore: exec git-update-server-info
+    when: >
+      (item.1.skipped is undefined or not item.1.skipped)
+      and "/home/"+remote_web_user+"/"+item.0.git_deploy.hubdirectory+"/hooks/post-update" == item.1.invocation.module_args.path
+      and item.1.stat.exists
+      and item.0.git_deploy is defined
+      and item.0.git_deploy.hubdirectory is defined
+    with_nested:
+      - "{{ domains }}"
+      - "{{ hubsetup.results }}"
+
+
+  - name: Check if remote has already been registered in the attached domain.
+    command: git ls-remote {{ item.git_deploy.hubdirectory }} &> /dev/null;
+    args:
+      chdir: /home/{{ remote_web_user }}/www/{{ item.name }}/wp-content
+    register: remote_set
+    with_items:
+      - "{{ domains }}"
+    when: >
+      (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+      and item.name not in domains_to_skip
+      and item.git_deploy is defined
+      and item.git_deploy.hubdirectory is defined
+
+  - name: Delete wp-content folder
+    file:
+      path: /home/{{ remote_web_user }}/www/{{ item.0.name }}/wp-content
+      state: absent
+    with_nested:
+      - "{{ domains }}"
+      - "{{ remote_set.results }}"
+    when: >
+      (item.1.skipped is undefined or not item.1.skipped)
+      and item.0.name == item.1.item.name
+      and item.1.rc != 0
+      and item.0.git_deploy is defined
+
+  - name: Recreate blank wp-content folder
+    file:
+      path: /home/{{ remote_web_user }}/www/{{ item.0.name }}/wp-content
+      state: directory
+    when: >
+      (item.1.skipped is undefined or not item.1.skipped)
+      and item.0.name == item.1.item.name
+      and item.1.rc != 0
+      and item.0.git_deploy is defined
+    with_nested:
+      - "{{ domains }}"
+      - "{{ remote_set.results }}"
+
+  - name: Clone hub in (links up hub for deploy)
+    command: git clone -o {{ item.0.git_deploy.hubdirectory }} /home/{{ remote_web_user }}/{{ item.0.git_deploy.hubdirectory }} wp-content
+    args:
+      chdir: /home/{{ remote_web_user }}/www/{{ item.0.name }}
+    when: >
+      (item.1.skipped is undefined or not item.1.skipped)
+      and item.0.name == item.1.item.name
+      and item.1.rc != 0
+      and item.0.git_deploy is defined
+      and item.0.git_deploy.hubdirectory is defined
+    with_nested:
+      - "{{ domains }}"
+      - "{{ remote_set.results }}"
+
+  - name: followup message for domains
+    set_fact:
+      post_run_domain_push_reminder: "{{ post_run_domain_push_reminder }}
+        + ['    {{ item.0.name }}: ssh://{{ remote_web_user }}@{{ ansible_default_ipv4.address }}/~/{{ item.0.git_deploy.hubdirectory}}']"
+    when: >
+      (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+      and item.name not in domains_to_skip
+      and item.git_deploy is defined
+      and item.git_deploy.hubdirectory is defined
+
+  - name: followup message prefix
+    set_fact:
+      post_run_messages: "{{ post_run_messages }}
+        + ['Now you have to add the server as a remote and push the first commits for the following sites and domains:']"
+    when: post_run_domain_push_reminder|length > 0
+
+  become: true
+  become_user: "{{ remote_web_user }}"

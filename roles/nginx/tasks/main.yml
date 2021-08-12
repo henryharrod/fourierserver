@@ -1,0 +1,71 @@
+---
+## installs and sets up basic configs.
+- name: Load nginx partial for log formats
+  set_fact:
+    nginx_log_format: "{{ lookup('template', 'templates/logformat.j2') }}"
+
+- name: Add Nginx repo
+  apt_repository:
+    repo: ppa:nginx/development
+
+- name: Install Nginx
+  apt:
+    name: nginx
+    state: present
+    force: yes
+    update_cache: yes
+
+- name: Check Nginx configs exist
+  stat: path=/etc/nginx/.git
+  register: git_exists
+
+- name: Remove default Nginx configs
+  file:
+    path: /etc/nginx
+    state: absent
+  when: not git_exists.stat.exists
+
+- name: Clone Nginx configs
+  git:
+    repo: "{{ nginx.repo }}"
+    dest: /etc/nginx
+    version: "{{ nginx.repo_branch }}"
+    force: yes
+  when: not git_exists.stat.exists
+
+- name: Set Nginx user
+  lineinfile:
+    dest: /etc/nginx/nginx.conf
+    regexp: "^user"
+    line: "user {{ remote_web_user }};"
+    state: present
+  notify: restart nginx
+
+- name: Generate dhparams
+  shell: openssl dhparam -out /etc/ssl/dhparams.pem 2048
+  args:
+    creates: /etc/ssl/dhparams.pem
+
+- name: Uncomment ssl_dhparam line in configuration
+  lineinfile:
+    dest: /etc/nginx/global/server/ssl.conf
+    regexp: "^# ssl_dhparam"
+    line: "ssl_dhparam /etc/ssl/dhparams.pem;"
+    backrefs: yes
+    state: present
+
+- name: Symlink default catchall
+  file:
+    src: "/etc/nginx/sites-available/default"
+    dest: "/etc/nginx/sites-enabled/default"
+    state: link
+
+- name: Add custom log format for le-access log.
+  blockinfile:
+    path: "/etc/nginx/nginx.conf"
+    marker: "## {mark} ANSIBLE MANAGED BLOCK ##"
+    insertafter: '# Default Logs'
+    content: |
+      {{ nginx_log_format }}
+      access_log /var/log/nginx/access-le.log le_json;
+  notify: restart nginx

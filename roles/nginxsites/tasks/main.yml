@@ -1,0 +1,313 @@
+---
+# sets up all nginx sites configurations
+
+- name: Copy configurations to new domain based configuration.
+  copy:
+    remote_src: yes
+    src: "{{ item.1.src }}"
+    dest: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    force: no
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and (item.0.wp.install is undefined or item.0.wp.install == 'singlesite')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.single_wp_site }}"
+
+- name: Copy configurations to new domain based configuration. (for a sub-directory multisite install)
+  copy:
+    remote_src: yes
+    src: "{{ item.1.src }}"
+    dest: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    force: no
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and (item.0.wp.network_type is undefined or item.0.wp.network_type == 'subdirectory')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdirectory_multi_wp_site }}"
+
+- name: Copy configurations to new domain based configuration. (for a sub-domain multisite install)
+  copy:
+    remote_src: yes
+    src: "{{ item.1.src }}"
+    dest: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    force: no
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and item.0.wp.network_type is defined
+    and item.0.wp.network_type == 'subdomain'
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdomain_multi_wp_site }}"
+
+- name: Modify root path directive configuration for configurations
+  replace:
+    dest: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "{{ item.1.root_path_regex }}"
+    replace: '\1/home/{{ remote_web_user }}/www/{{ item.0.name }}\2'
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and (item.0.wp.install is undefined or item.0.wp.install == 'singlesite')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.single_wp_site }}"
+
+- name: Modify root path directive configuration for configurations (for a sub-directory multisite install)
+  replace:
+    dest: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "{{ item.1.root_path_regex }}"
+    replace: '\1/home/{{ remote_web_user }}/www/{{ item.0.name }}\2'
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and (item.0.wp.network_type is undefined or item.0.wp.network_type == 'subdirectory')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdirectory_multi_wp_site }}"
+
+- name: Modify root path directive configuration for configurations (for a sub-domain multisite install)
+  replace:
+    dest: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "{{ item.1.root_path_regex }}"
+    replace: '\1/home/{{ remote_web_user }}/www/{{ item.0.name }}\2'
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and item.0.wp.network_type is defined
+    and item.0.wp.network_type == 'subdomain'
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdomain_multi_wp_site }}"
+
+- name: Replace template domain in configurations file with the actual domain
+  replace:
+    path: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "{{ item.1.domain_regex }}"
+    replace: '\1{{ item.0.name }}\2'
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and (item.0.wp.install is undefined or item.0.wp.install == 'singlesite')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.single_wp_site }}"
+
+- name: Replace template domain in configurations file with the actual domain (for a sub-directory multisite install)
+  replace:
+    path: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "{{ item.1.domain_regex }}"
+    replace: '\1{{ item.0.name }}\2'
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and (item.0.wp.network_type is undefined or item.0.wp.network_type == 'subdirectory')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdirectory_multi_wp_site }}"
+
+- name: Replace template domain in configurations file with the actual domain (for a sub-domain multisite install)
+  replace:
+    path: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "{{ item.1.domain_regex }}"
+    replace: '\1{{ item.0.name }}\2'
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and item.0.wp.network_type is defined
+    and item.0.wp.network_type == 'subdomain'
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdomain_multi_wp_site }}"
+
+## Modify lets encrypt to point to its own folder
+- name: Modify lets encrypt to point to its own folder for authorization (nonssl)
+  replace:
+    path: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "{{ nginx_defaults.letsencrypt_regex }}"
+    replace: '\1/home/{{ remote_web_user }}/www/letsencrypt\2'
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and (item.0.wp.install is undefined or item.0.wp.install == 'singlesite')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.single_wp_site }}"
+
+## Modify lets encrypt to point to its own folder
+- name: Modify lets encrypt to point to its own folder for authorization (nonssl) (for a sub-directory multisite install)
+  replace:
+    path: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "{{ nginx_defaults.letsencrypt_regex }}"
+    replace: '\1/home/{{ remote_web_user }}/www/letsencrypt\2'
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and (item.0.wp.network_type is undefined or item.0.wp.network_type == 'subdirectory')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdirectory_multi_wp_site }}"
+
+## Modify lets encrypt to point to its own folder
+- name: Modify lets encrypt to point to its own folder for authorization (nonssl) (for a sub-domain multisite install)
+  replace:
+    path: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "{{ nginx_defaults.letsencrypt_regex }}"
+    replace: '\1/home/{{ remote_web_user }}/www/letsencrypt\2'
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and item.0.wp.network_type is defined
+    and item.0.wp.network_type == 'subdomain'
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdomain_multi_wp_site }}"
+
+## Modify access_log_path directive
+- name: Modify access_log path directive for configurations.
+  lineinfile:
+    dest: "{{ nginx_defaults.file_path}}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "access_log"
+    line: "access_log /home/{{ remote_web_user }}/www/{{ item.0.name }}/logs/access.log;"
+    state: present
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and (item.0.wp.install is undefined or item.0.wp.install == 'singlesite')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.single_wp_site }}"
+
+## Modify access_log_path directive
+- name: Modify access_log path directive for configurations. (for a sub-directory multisite install)
+  lineinfile:
+    dest: "{{ nginx_defaults.file_path}}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "access_log"
+    line: "access_log /home/{{ remote_web_user }}/www/{{ item.0.name }}/logs/access.log;"
+    state: present
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and (item.0.wp.network_type is undefined or item.0.wp.network_type == 'subdirectory')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdirectory_multi_wp_site }}"
+
+## Modify access_log_path directive
+- name: Modify access_log path directive for configurations. (for a sub-domain multisite install)
+  lineinfile:
+    dest: "{{ nginx_defaults.file_path}}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "access_log"
+    line: "access_log /home/{{ remote_web_user }}/www/{{ item.0.name }}/logs/access.log;"
+    state: present
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and item.0.wp.network_type is defined
+    and item.0.wp.network_type == 'subdomain'
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdomain_multi_wp_site }}"
+
+
+## modify error_log path directives
+- name: Modify error_log path directive for all domain
+  lineinfile:
+    dest: "{{ nginx_defaults.file_path}}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "error_log"
+    line: "error_log /home/{{ remote_web_user }}/www/{{ item.0.name }}/logs/error.log;"
+    state: present
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and (item.0.wp.install is undefined or item.0.wp.install == 'singlesite')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.single_wp_site }}"
+
+
+## modify error_log path directives
+- name: Modify error_log path directive for all domain (for a sub-directory multisite install)
+  lineinfile:
+    dest: "{{ nginx_defaults.file_path}}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "error_log"
+    line: "error_log /home/{{ remote_web_user }}/www/{{ item.0.name }}/logs/error.log;"
+    state: present
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and (item.0.wp.network_type is undefined or item.0.wp.network_type == 'subdirectory')
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdirectory_multi_wp_site }}"
+
+
+## modify error_log path directives
+- name: Modify error_log path directive for all domain (for a sub-domain multisite install)
+  lineinfile:
+    dest: "{{ nginx_defaults.file_path}}/{{ item.0.name }}.{{ item.1.type }}.conf"
+    regexp: "error_log"
+    line: "error_log /home/{{ remote_web_user }}/www/{{ item.0.name }}/logs/error.log;"
+    state: present
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.0.name in domains_to_use)
+    and item.0.name not in domains_to_skip
+    and item.0.wp.install is defined
+    and item.0.wp.install == 'multisite'
+    and item.0.wp.network_type is defined
+    and item.0.wp.network_type == 'subdomain'
+  with_nested:
+    - "{{ domains }}"
+    - "{{ nginx_defaults.subdomain_multi_wp_site }}"
+
+## does the ssl conf symlink exist?
+- name: Does ssl configuration symlink exist?
+  register: ssl_symlink_exists
+  stat:
+    path: "{{ nginx_defaults.file_path_enabled }}/{{ item.name }}.{{ nginx_defaults.ssl_ext }}"
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+    and item.name not in domains_to_skip
+  with_items:
+    - "{{ domains }}"
+
+## symlink non ssl domain for nginx (ssl domain symlink happens in letsencrypt role)
+- name: Symlink non ssl domain (ssl domain symlink happens in letsencrypt role)
+  file:
+    src: "{{ nginx_defaults.file_path }}/{{ item.0.name }}.{{ nginx_defaults.non_ssl_ext }}"
+    dest: "{{ nginx_defaults.file_path_enabled }}/{{ item.0.name }}.{{ nginx_defaults.non_ssl_ext }}"
+    state: link
+  notify: restart nginx
+  when: >
+    (item.1.skipped is undefined or not item.1.skipped)
+    and nginx_defaults.file_path_enabled+"/"+item.0.name+"."+nginx_defaults.ssl_ext == item.1.invocation.module_args.path
+    and not item.1.stat.exists
+  with_nested:
+    - "{{ domains }}"
+    - "{{ ssl_symlink_exists.results }}"

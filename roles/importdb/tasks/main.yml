@@ -1,0 +1,109 @@
+---
+
+# If you have valid paths to an sql file defined in {{ domains[x].wp.db_import.path }} then this role will take care of importing them into the relevant db.
+- name: Verify src exists for item.
+  become: false
+  local_action:
+    module: stat
+    path: "{{ item.wp.db_import.path }}"
+  register: import_src_paths
+  when: >
+    item.wp.db_import is defined and item.wp.db_import.path is defined
+    and (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+    and item.name not in domains_to_skip
+  with_items:
+    - "{{ domains }}"
+
+
+- block:
+
+  - name: Copy sql files for import from local host to remote host.
+    copy:
+      src: "{{ item.0.wp.db_import.path }}"
+      dest: /home/{{ remote_web_user }}/www/{{ item.0.name }}/import.sql
+    when: >
+      (item.1.skipped is undefined or not item.1.skipped)
+      and item.0.wp.db_import is defined
+      and item.0.wp.db_import.path is defined
+      and item.1.stat.path == item.0.wp.db_import.path
+      and item.1.stat.exists
+    with_nested:
+      - "{{ domains }}"
+      - "{{ import_src_paths.results }}"
+
+  - name: Drop existing and recreates the db using existing settings in the remotes wp-config.php
+    command: wp db reset --yes
+    args:
+      chdir: /home/{{ remote_web_user }}/www/{{ item.0.name }}
+    when: >
+      (item.1.skipped is undefined or not item.1.skipped)
+      and item.0.wp.db_import is defined
+      and item.0.wp.db_import.path is defined
+      and item.1.stat.path == item.0.wp.db_import.path
+      and item.1.stat.exists
+    with_nested:
+      - "{{ domains }}"
+      - "{{ import_src_paths.results }}"
+
+  - name: Import into db for domain using wp db import
+    command: wp db import import.sql
+    args:
+      chdir: /home/{{ remote_web_user }}/www/{{ item.0.name }}
+    when: >
+      (item.1.skipped is undefined or not item.1.skipped)
+      and item.0.wp.db_import is defined
+      and item.0.wp.db_import.path is defined
+      and item.1.stat.path == item.0.wp.db_import.path
+      and item.1.stat.exists
+    with_nested:
+      - "{{ domains }}"
+      - "{{ import_src_paths.results }}"
+
+  - name: replace existing db prefix in wp-config
+    replace:
+      dest: /home/{{ remote_web_user }}/www/{{ item.name }}/wp-config.php
+      regexp: '(table_prefix = .)wp_(.;)'
+      replace: '\1{{ item.wp.db_import.db_prefix | default("wp_") }}\2'
+    when: >
+      item.wp.db_import is defined
+      and item.wp.db_import.path
+      and (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+      and item.name not in domains_to_skip
+    with_items:
+      - "{{ domains }}"
+
+  - name: Do search-replace on db for new domain
+    command: wp search-replace '{{ item.wp.db_import.search_replace_domain }}' '{{ item.scheme | default('http://' }}{{ item.name }}'
+    args:
+      chdir: /home/{{ remote_web_user }}/www/{{ item.name }}
+    when: >
+      item.wp.db_import is defined
+      and item.wp.db_import.search_replace_domain is defined
+      and item.wp.db_import.search_replace_domain != item.name
+      and (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+      and item.name not in domains_to_skip
+    with_items:
+      - "{{ domains }}"
+
+  - name: Do search-replace on db for old path to new path (for WordPress files hosted)
+    command: wp search-replace '{{ item.wp.db_import.search_replace_path }}' '/home/{{ remote_web_user }}/www/{{ item.name }}'
+    args:
+      chdir: /home/{{ remote_web_user }}/www/{{ item.name }}
+    when: >
+      item.wp.db_import is defined
+      and item.wp.db_import.search_replace_path is defined
+      and (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+      and item.name not in domains_to_skip
+    with_items:
+      - "{{ domains }}"
+
+  - name: delete import.sql that was copied over
+    file:
+      path: /home/{{ remote_web_user }}/www/{{ item.name }}/import.sql
+      state: absent
+    with_items:
+      - "{{ domains }}"
+
+  become: true
+  become_user: "{{ remote_web_user }}"
+

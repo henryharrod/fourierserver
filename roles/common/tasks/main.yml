@@ -1,0 +1,16 @@
+---
+- name: Upgrade packages
+  apt: upgrade=dist
+  
+- name: Install packages
+  apt:
+    name: "{{ item }}"
+    state: latest
+    update_cache: yes
+  with_items:
+  - fail2ban
+  - git-core
+  - letsencrypt
+  - unzip
+  - python-pip
+  - python-dev

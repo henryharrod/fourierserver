@@ -1,0 +1,179 @@
+#Copy config to a file named vars.yml and change to suit your own needs
+
+## -- server config -- ##
+# this is the sudo user that should already be setup on the server.  Any sudo roles will use this user and this is the
+# user ansible initially connects as.
+remote_sudo_user: fourierweb
+# this is the user ansible will created for the web related services and will not have sudo privileges.
+remote_web_user: web
+# This is the password ansible will create the remote web user with.  The string should be an encrypted string (see
+# Enter a password to use for the remote web user (must be encrypted, see
+# http://docs.ansible.com/ansible/latest/faq.html#how-do-i-generate-crypted-passwords-for-the-user-module)
+remote_web_user_password: "EncryptedSecretString"
+# The path to the ssh public key that will be copied to the authorized_keys file for the remote_web_user when it's
+# created.  The default is usually sufficient if you've already got keys generated in the default location.
+web_user_ssh_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+
+## -- PHP configuration -- ##
+php_fpm:
+  # PHP version to install. Defaults to PHP 7.3.
+  version: 7.2
+
+## -- nginx configuration -- ##
+nginx:
+  # repository used for the main nginx configuration folder. Currently the nginx role is DEPENDENT on this repository.
+  # You can fork it and modify to get specific extra configuration you want as long as you don't change elements that
+  # are used by the role.  If you want a custom configuration, you can use the custom_nginx_conf array in the domains
+  # configuration
+  repo: https://github.com/nerrad/wordpress-nginx.git
+  # this is the branch that will be pulled for the named repository
+  repo_branch: test-merge-le-phpup
+
+## -- letsencrypt configuration -- ##
+letsencrypt:
+  # this is the email address that will be used when registering domains that are flagged to be configured for ssl.
+  email: henry@fourieraudio.com
+
+## -- Logentries Configurations -- ##
+# If provided, and the logentries role is run for the playbook, then this will configure logentries.
+logentries_account_key: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx"
+logentries_logs:
+  - name: "Authentication"
+    path: "/var/log/auth.log"
+  - name: "Nginx-Access"
+    path: "/var/log/nginx/access.log"
+# optional. you don't need this. will default to ansible_fqdn
+logentries_hostname: my.host.com
+# optional. use existing logentries key set if you want to use it.
+logentries_set_key: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+## -- Domain configurations -- ##
+# example:
+domains:
+  - name: fourieraudio.com
+    # Set this to what scheme is desired for the url (https://, http:// etc)
+    # Note, this will be used in any search and replace if you've provided a db_import as well.
+    scheme: https://
+    # if configured then a wp site is setup. Otherwise a plain php based configuration is used
+    wp:
+      # Set the WordPress installation type - multisite or singlesite. If not provided defaults to 'singlesite'.
+      install: multisite
+      # WordPress Multisite installation network type. If not provided defaults to 'subdirectory'.
+      network_type: subdomain
+      admin_user: username
+      # plain_text you can change after site creation
+      admin_pass: admin_password
+      admin_email: email@address.com
+      # name to give the database for the site
+      db_name: fouriersite
+      site_title: Fourier Audio
+      ## -- wp_db_import --
+      # Include the path to your sql import if you want to import.
+      # by default these are not defined. Uncomment and fill with the the correct path to your local import file that will
+      # be copied over to the source.
+
+      # search_replace_path is the path to the WordPress installation where the db was exported from.  It will be replaced
+      # with the path for the domain the db is being imported to.
+
+      # search_replace_domain is the domain in the db file for the old WordPress installation that will get replaced with the
+      # domain for the new installation. If the db import is already correct for the domain either don't set the variable or
+      # have it as the same as what is defined for the domain on the host.  Include the scheme (https:// or http://)
+
+      # ssl is for whether the new domain should be ssl or not (https:// or http://).  It will depend on whether you've setup
+      # the new site with lets encrypt cert or not (default true).
+
+      # db_prefix is for if the table you are importing is using an non-standard db prefix.
+      # db_import:
+      #   path: "{{ playbook_dir }}/dbimports/import.sql"
+      #   search_replace_path: /path/for/db/exported/from
+      #   search_replace_domain: olddomain.com
+      #   db_prefix: wp_
+    # -- git_deploy --
+    # This is used to indicate required parameters for various sites you setup on git.  You can associate different named
+    # named branches of the same repo with the given site.
+    # Uncomment and fill out the below if you are using git deploy
+    # hubdirectory: The name of the directory that will serve as the deploy "hub" for this site.  Note, if you have
+    #               different directory names for each site then there will be different hubs.
+    # branch_deployed:  This is the branch that will be listened for with any code pushed to the hub.  If that branch is
+    #                   received, then it will automatically be deployed to the attached site.
+    git_deploy:
+      hubdirectory: hub
+      branch_deployed: master
+
+# -- Webhook Listener for Grunt Build Machine triggers -- #
+# The following variables are for the buildmachine-webhook role.  This role sets up a php webhook listener based off of
+# https://github.com/nerrad/buildmachine-webhook-listener.
+webhook:
+  # What will be the domain for this webhook. The role will configure nginx for this domain (including ssl) so make
+  # sure you have dns pointing to the server before running this role
+  domain: webhook.somedomain.com
+
+  # This represents email address associated with the user doing git commits from the buildmachine.  The webhook
+  # listener will ignore any head commit notifications from git users with this email.
+  server_git_email: someemail@example.org
+
+  # This is the path on the server where your grunt build machine is configured. If you set up the grunt build-machine
+  # using its role in this playbook (default paths) then you don't need to configure this and just leave it undefined
+  # in your configuration
+  grunt_path: /path/to/grunt/build-machine/on/server
+
+  # This is the path to the source files of the plugins the grunt build-machine executes on.  Again, if you set up the
+  # grunt build-machine using its role in this playbook you don't need to configure this and just leave it undefined
+  # in your configuration
+  grunt_src_path: /path/to/grunt/build-machine/on/server/buildsrc/
+
+  # This is the path to the build-machine installed repositories map json file.   Again, if you set up the
+  # grunt build-machine using its role in this playbook you don't need to configure this and just leave it undefined
+  # in your configuration
+  map_file: /path/to/grunt/build-machine/on/server/installedReposMap.json
+
+# -- grunt build machine for wordpress --#
+# The following variables are for the grunt-buildmachine role.  This role sets up an install of the "Grunt Build Machine
+# for WordPress Plugins" that is found at the following repository:
+# https://github.com/eventespresso/grunt-wp-plugin-buildmachine
+buildmachine:
+  # required, these are the various details surrounding the build directory where zips will be exposed at after a build.
+  build_creds:
+    # The build directory is protected by htpasswd, this is the htpasswd user.
+    archiveUser: htpasswduserforarchivebuilds
+    # This is what you want the htpasswd password to be for the build director.
+    archivePass: htpasswdpassforarchivebuilds
+    # This is what you want the domain for the build zips to be retrievable from.
+    # This will be setup with an ssl cert by letsencrypt so make sure your domain is pointing to the server this is
+    # setup on.
+    archiveDomain: urlpointingtoyourbuildpath.com
+  # optional.  You can provide credentials for slack notifications on successful build tasks.
+  slack_creds:
+    # This should be a user auth-token (prefixed by xoxp) and it can be generated at this url while logged in on your
+    # slack team: https://api.slack.com/custom-integrations/legacy-tokens
+    authToken: xoxp-xxxxxxxxxxx-xxxxxxxxxxxx-xxxxxxxxxx-xxxxxxxx
+    # Bot tokens are generated via the slack apps interface and are prefixed by xoxb.
+    botToken: xoxb-xxxxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxx
+    channels:
+      # This is the channel slug for where you want build notifications going.
+      build: "#buildnotification"
+      # This is the channel you want main notifications going.  Topic will also be changed in this channel for version
+      # bumps when text in the topic matches the following formats (on what is identified as the "parent plugin"):
+      # /REL:*.[0-9]\.[0-9]\.[0-9]+\.p/  -- release version numbers (where "p' is set to denote release versions
+      # /MASTR:*.[0-9]\.[0-9]\.[0-9]+\.rc\.[0-9]{3}/g -- release candidate version numbers (on master branch).
+      main: "#general"
+  # optional. You can provide credentials for hipchat notifications on successful build tasks.
+  hipchat_creds:
+    # go to yourdomain.hipchat.com/admin/api and obtain the authToken from there.
+    authToken: xxxxxxxxxxxxxxxxx
+    # id of the room to receive notifications (this would be where the topic is updates
+    roomID: 00000000
+  # optional. This is the version "indicators" used to represent various version types in the version string of builds. For any
+  # version meta string that you don't want used, just leave as an empty string.
+  version_meta:
+    # 4.2.4.beta
+    preRelease: beta
+    # 4.2.4.decaf - this is the version string used for wp.org releases
+    decaf: decaf
+    # 4.2.4.rc.000
+    rc: rc
+    # 4.2.4.p
+    release: p
+  # optional. This is the slug of the main plugin.  Currently this value is used to determine what builds trigger a topic change
+  # in the connected slack and/or hipchat rooms. If not provided, topics won't be updated in the notification channels.
+  parentPluginSlug: plugin-slug

@@ -1,0 +1,17 @@
+case " $1 " in
+*'refs/heads/{{ item.0.git_deploy.branch_deployed }}'*)
+        echo
+    echo "*** {{ item.0.name }} site is being updated from {{ item.0.git_deploy.hubdirectory }} ***"
+        echo
+    cd /home/{{ remote_web_user }}/www/{{ item.0.name }}/wp-content || exit
+        unset GIT_DIR
+        # Note this command uses a flag that will create the branch if it doesn't exist or reset the existing branch to
+        # the state of the branch being pushed (thus overwriting any non committed changes in the working directory on
+        # the site.
+        git checkout -B {{ item.0.git_deploy.branch_deployed }}
+        git pull {{ item.0.git_deploy.hubdirectory }} {{ item.0.git_deploy.branch_deployed }}
+        echo
+    echo "{{ item.0.git_deploy.branch_deployed }} branch successfully pulled"
+    echo
+    ;;
+esac

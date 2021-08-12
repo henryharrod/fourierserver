@@ -1,0 +1,55 @@
+---
+- name: create letsencrypt directory
+  file:
+    name: /home/{{ remote_web_user }}/www/letsencrypt
+    state: directory
+
+- name: force restart of nginx
+  service:
+    name: nginx
+    state: restarted
+  become: yes
+
+- name: Create letsencrypt certificate
+  shell: letsencrypt certonly -n --webroot -w /home/{{ remote_web_user }}/www/letsencrypt -m {{ letsencrypt.email }} --agree-tos -d {{ item.name }}
+  args:
+    creates: /etc/letsencrypt/live/{{ item.name }}
+  notify: restart nginx
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+    and item.name not in domains_to_skip
+  with_items:
+    - "{{ domains }}"
+
+- name: Remove symlink for non ssl site.
+  file:
+    path: /etc/nginx/sites-enabled/{{ item.name }}.nonssl.conf
+    state: absent
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+    and item.name not in domains_to_skip
+  with_items:
+    - "{{ domains }}"
+
+- name: Symlink ssl domain
+  file:
+    src: /etc/nginx/sites-available/{{ item.name }}.ssl.conf
+    dest: /etc/nginx/sites-enabled/{{ item.name }}.ssl.conf
+    state: link
+  notify: restart nginx
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+    and item.name not in domains_to_skip
+  with_items:
+    - "{{ domains }}"
+
+- name: Add letsencrypt cronjob for cert renewal
+  cron:
+    name: letsencrypt_renewal_{{ item.name }}
+    special_time: weekly
+    job: (letsencrypt --renew certonly -n --webroot -w /home/{{ remote_web_user }}/www/letsencrypt -m {{ letsencrypt.email }} --agree-tos -d {{ item.name }} && service nginx restart) 2>&1 | logger -t letsencrypt_renewal
+  when: >
+    (("all" in domains_to_use and "none" in domains_to_skip) or item.name in domains_to_use)
+    and item.name not in domains_to_skip
+  with_items:
+    - "{{ domains }}"
